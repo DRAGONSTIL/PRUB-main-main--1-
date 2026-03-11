@@ -35,10 +35,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     const router = useRouter()
     const { setIsNewCandidatoDialogOpen } = useGlobalDialogs()
 
-    const [mounted, setMounted] = useState(false)
-
     useEffect(() => {
-        setMounted(true)
         // Rehydrate zustand persist store
         useUIStore.persist.rehydrate()
     }, [])
@@ -88,6 +85,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener('keydown', handler)
     }, [])
 
+    useEffect(() => {
+        if (status === 'unauthenticated') {
+            router.push('/login')
+        }
+    }, [status, router])
+
     if (status === 'loading') {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
@@ -101,12 +104,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </div>
         )
     }
-
-    useEffect(() => {
-        if (status === 'unauthenticated') {
-            router.push('/login')
-        }
-    }, [status, router])
 
     if (status === 'unauthenticated') {
         return null
