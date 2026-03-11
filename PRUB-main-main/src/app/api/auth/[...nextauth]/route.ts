@@ -1,8 +1,18 @@
 import NextAuth from 'next-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { authOptions } from '@/lib/auth'
+import { assertRuntimeSecurity } from '@/lib/bootstrap'
 
-const handler = NextAuth(authOptions)
+async function runAuthHandler(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production' && !process.env.NEXTAUTH_SECRET) {
+    return NextResponse.json(
+      {
+        error: 'Auth misconfigured: NEXTAUTH_SECRET is required in production',
+        code: 'AUTH_CONFIG_ERROR',
+      },
+      { status: 500 }
+    )
+  }
 
 function getLastPathSegment(pathname: string): string {
   const clean = pathname.replace(/\/+$/, '')
