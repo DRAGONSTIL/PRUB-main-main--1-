@@ -8,10 +8,8 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { db } from './db'
 import { Rol } from '@prisma/client'
 import { randomBytes } from 'crypto'
-import { assertRuntimeSecurity } from './bootstrap'
 import { getPermissionsByRole } from '@/lib/authorization'
 
-assertRuntimeSecurity()
 const isDemoModeEnabled = process.env.DEMO_MODE === 'true' && process.env.NODE_ENV !== 'production'
 
 // Helper para generar token de invitación
