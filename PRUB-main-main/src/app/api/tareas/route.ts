@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { z } from 'zod'
 import { isValidTaskTransition, TAREA_ESTATUS } from '@/lib/workflow'
+import type { SessionUser } from '@/lib/api-security'
 
 const PRIORIDADES = ['BAJA', 'MEDIA', 'ALTA', 'URGENTE'] as const
 
@@ -39,20 +40,21 @@ const TareaQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
 })
 
-function tenantWhere(session: NonNullable<Awaited<ReturnType<typeof getServerSession>>>) {
-  if (session.user.rol === 'ADMIN') return {}
-  if (session.user.rol === 'GERENTE') {
+function tenantWhere(user: SessionUser) {
+  if (user.rol === 'ADMIN') return {}
+  if (user.rol === 'GERENTE') {
     return {
-      OR: [{ creadoPor: { empresaId: session.user.empresaId } }, { asignadoA: { empresaId: session.user.empresaId } }],
+      OR: [{ creadoPor: { empresaId: user.empresaId } }, { asignadoA: { empresaId: user.empresaId } }],
     }
   }
-  return { OR: [{ creadoPorId: session.user.id }, { asignadoAId: session.user.id }] }
+  return { OR: [{ creadoPorId: user.id }, { asignadoAId: user.id }] }
 }
 
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    const user = session.user as SessionUser
 
     const { searchParams } = new URL(request.url)
     const query = TareaQuerySchema.parse({
@@ -66,7 +68,7 @@ export async function GET(request: NextRequest) {
       limit: searchParams.get('limit') || 50,
     })
 
-    const andFilters: any[] = [tenantWhere(session)]
+    const andFilters: any[] = [tenantWhere(user)]
 
     if (query.estatus) andFilters.push({ estatus: query.estatus })
     if (query.prioridad) andFilters.push({ prioridad: query.prioridad })
@@ -87,7 +89,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (query.onlyMine === 'true') {
-      andFilters.push({ OR: [{ creadoPorId: session.user.id }, { asignadoAId: session.user.id }] })
+      andFilters.push({ OR: [{ creadoPorId: user.id }, { asignadoAId: user.id }] })
     }
 
     const where: any = { AND: andFilters }
