@@ -67,20 +67,44 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
     titulo: '',
     descripcion: '',
     prioridad: 'MEDIA',
+    estatus: 'PENDIENTE',
     fechaLimite: '',
     asignadoAId: ''
+  })
+  const [tareaFilters, setTareaFilters] = useState({
+    q: '',
+    estatus: 'ALL',
+    prioridad: 'ALL',
+    onlyMine: false,
+    overdue: false,
   })
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [tareaFilters])
+
+  const getResponseError = async (res: Response) => {
+    try {
+      const data = await res.json()
+      return data?.error || 'Error de servidor'
+    } catch {
+      return 'Error de servidor'
+    }
+  }
 
   const loadData = async () => {
     setLoading(true)
     try {
+      const tareaParams = new URLSearchParams()
+      if (tareaFilters.q.trim()) tareaParams.set('q', tareaFilters.q.trim())
+      if (tareaFilters.estatus !== 'ALL') tareaParams.set('estatus', tareaFilters.estatus)
+      if (tareaFilters.prioridad !== 'ALL') tareaParams.set('prioridad', tareaFilters.prioridad)
+      if (tareaFilters.onlyMine) tareaParams.set('onlyMine', 'true')
+      if (tareaFilters.overdue) tareaParams.set('overdue', 'true')
+
       const [notasRes, tareasRes, usuariosRes] = await Promise.all([
         fetch('/api/notas'),
-        fetch('/api/tareas'),
+        fetch(`/api/tareas?${tareaParams.toString()}`),
         fetch('/api/usuarios'),
       ])
       if (notasRes.ok) {
@@ -119,6 +143,8 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
         setNotaForm({ titulo: '', contenido: '', tipo: 'GENERAL' })
         setEditingNota(null)
         loadData()
+      } else {
+        addNotification({ type: 'error', title: await getResponseError(res) })
       }
     } catch (error) {
       addNotification({ type: 'error', title: 'Error al guardar nota' })
@@ -134,6 +160,7 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
         titulo: tareaForm.titulo,
         descripcion: tareaForm.descripcion,
         prioridad: tareaForm.prioridad,
+        estatus: tareaForm.estatus,
       }
       if (tareaForm.fechaLimite) data.fechaLimite = tareaForm.fechaLimite
       if (tareaForm.asignadoAId) data.asignadoAId = tareaForm.asignadoAId
@@ -147,9 +174,11 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
       if (res.ok) {
         addNotification({ type: 'success', title: editingTarea ? 'Tarea actualizada' : 'Tarea creada' })
         setShowTareaDialog(false)
-        setTareaForm({ titulo: '', descripcion: '', prioridad: 'MEDIA', fechaLimite: '', asignadoAId: '' })
+        setTareaForm({ titulo: '', descripcion: '', prioridad: 'MEDIA', estatus: 'PENDIENTE', fechaLimite: '', asignadoAId: '' })
         setEditingTarea(null)
         loadData()
+      } else {
+        addNotification({ type: 'error', title: await getResponseError(res) })
       }
     } catch (error) {
       addNotification({ type: 'error', title: 'Error al guardar tarea' })
@@ -167,6 +196,8 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
       if (res.ok) {
         addNotification({ type: 'success', title: completed ? 'Tarea completada' : 'Tarea reabierta' })
         loadData()
+      } else {
+        addNotification({ type: 'error', title: await getResponseError(res) })
       }
     } catch (error) {
       addNotification({ type: 'error', title: 'Error al actualizar tarea' })
@@ -179,6 +210,8 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
       if (res.ok) {
         addNotification({ type: 'success', title: 'Nota eliminada' })
         loadData()
+      } else {
+        addNotification({ type: 'error', title: await getResponseError(res) })
       }
     } catch (error) {
       addNotification({ type: 'error', title: 'Error al eliminar' })
@@ -214,12 +247,12 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Notas y Tareas</h2>
-          <p className="text-muted-foreground">Organiza tus notas y gestiona tareas pendientes</p>
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-400 bg-clip-text text-transparent">Notas y Tareas</h2>
+          <p className="text-muted-foreground">Suite de productividad premium para seguimiento operativo impecable.</p>
         </div>
       </div>
 
-      <Tabs defaultValue="tareas" className="w-full">
+      <Tabs defaultValue="tareas" className="w-full rounded-2xl border border-amber-300/20 bg-gradient-to-br from-zinc-950 via-zinc-900 to-amber-950/20 p-4 shadow-[0_0_60px_rgba(251,191,36,0.12)]">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="tareas" className="gap-2">
             <CheckSquare className="h-4 w-4" />
@@ -233,10 +266,43 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
 
         {/* TAREAS */}
         <TabsContent value="tareas" className="space-y-4 mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <Input
+              placeholder="Buscar tarea..."
+              value={tareaFilters.q}
+              onChange={(e) => setTareaFilters((prev) => ({ ...prev, q: e.target.value }))}
+              className="md:col-span-2"
+            />
+            <Select value={tareaFilters.estatus} onValueChange={(v) => setTareaFilters((prev) => ({ ...prev, estatus: v }))}>
+              <SelectTrigger><SelectValue placeholder="Estatus" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos los estatus</SelectItem>
+                <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                <SelectItem value="EN_PROGRESO">En progreso</SelectItem>
+                <SelectItem value="COMPLETADA">Completada</SelectItem>
+                <SelectItem value="CANCELADA">Cancelada</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={tareaFilters.prioridad} onValueChange={(v) => setTareaFilters((prev) => ({ ...prev, prioridad: v }))}>
+              <SelectTrigger><SelectValue placeholder="Prioridad" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todas las prioridades</SelectItem>
+                <SelectItem value="URGENTE">Urgente</SelectItem>
+                <SelectItem value="ALTA">Alta</SelectItem>
+                <SelectItem value="MEDIA">Media</SelectItem>
+                <SelectItem value="BAJA">Baja</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Button variant={tareaFilters.onlyMine ? 'default' : 'outline'} onClick={() => setTareaFilters((prev) => ({ ...prev, onlyMine: !prev.onlyMine }))}>Mis tareas</Button>
+              <Button variant={tareaFilters.overdue ? 'destructive' : 'outline'} onClick={() => setTareaFilters((prev) => ({ ...prev, overdue: !prev.overdue }))}>Vencidas</Button>
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <Button onClick={() => {
               setEditingTarea(null)
-              setTareaForm({ titulo: '', descripcion: '', prioridad: 'MEDIA', fechaLimite: '', asignadoAId: '' })
+              setTareaForm({ titulo: '', descripcion: '', prioridad: 'MEDIA', estatus: 'PENDIENTE', fechaLimite: '', asignadoAId: '' })
               setShowTareaDialog(true)
             }}>
               <Plus className="h-4 w-4 mr-2" />
@@ -258,6 +324,7 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
                       <Checkbox
+                        checked={tarea.estatus === 'COMPLETADA'}
                         className="mt-1"
                         onCheckedChange={(checked) => handleCompleteTarea(tarea.id, !!checked)}
                       />
@@ -265,6 +332,7 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
                         <div className="flex items-center gap-2">
                           <p className="font-medium">{tarea.titulo}</p>
                           <Badge className={getPrioridadColor(tarea.prioridad)}>{tarea.prioridad}</Badge>
+                          <Badge variant="outline">{tarea.estatus}</Badge>
                         </div>
                         {tarea.descripcion && (
                           <p className="text-sm text-muted-foreground mt-1">{tarea.descripcion}</p>
@@ -290,6 +358,7 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
                           titulo: tarea.titulo,
                           descripcion: tarea.descripcion || '',
                           prioridad: tarea.prioridad,
+                          estatus: tarea.estatus,
                           fechaLimite: tarea.fechaLimite ? tarea.fechaLimite.split('T')[0] : '',
                           asignadoAId: ''
                         })
@@ -442,6 +511,18 @@ export function NotasTareasManager({ userId, addNotification }: NotasTareasManag
                     <SelectItem value="MEDIA">Media</SelectItem>
                     <SelectItem value="ALTA">Alta</SelectItem>
                     <SelectItem value="URGENTE">Urgente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Estatus</Label>
+                <Select value={tareaForm.estatus} onValueChange={(v) => setTareaForm({ ...tareaForm, estatus: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                    <SelectItem value="EN_PROGRESO">En progreso</SelectItem>
+                    <SelectItem value="COMPLETADA">Completada</SelectItem>
+                    <SelectItem value="CANCELADA">Cancelada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
