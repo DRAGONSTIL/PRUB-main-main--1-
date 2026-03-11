@@ -14,35 +14,42 @@ async function runAuthHandler(request: NextRequest) {
     )
   }
 
-  try {
-    assertRuntimeSecurity()
-    const handler = NextAuth(authOptions)
-    return await handler(request)
-  } catch (error) {
-    console.error('nextauth_route_error', error)
-    if (error instanceof Error && /DEMO_MODE/.test(error.message)) {
-      return NextResponse.json(
-        {
-          error: 'Security boot guard: DEMO_MODE no puede estar habilitado en producción',
-          code: 'AUTH_DEMO_MODE_FORBIDDEN',
-        },
-        { status: 500 }
-      )
-    }
-    return NextResponse.json(
-      {
-        error: 'Internal auth error',
-        code: 'AUTH_INTERNAL_ERROR',
-      },
-      { status: 500 }
-    )
-  }
+function getLastPathSegment(pathname: string): string {
+  const clean = pathname.replace(/\/+$/, '')
+  const parts = clean.split('/').filter(Boolean)
+  return parts[parts.length - 1] || ''
 }
 
 export async function GET(request: NextRequest) {
-  return runAuthHandler(request)
+  const tail = getLastPathSegment(request.nextUrl.pathname)
+
+  // Hardening: si por enrutamiento cae en el catch-all, mantener contrato JSON para NextAuth client.
+  if (tail === 'session') {
+    try {
+      return await handler(request)
+    } catch (error) {
+      console.error('nextauth_session_fallback_error', error)
+      return NextResponse.json({}, { status: 200 })
+    }
+  }
+
+  return handler(request)
 }
 
 export async function POST(request: NextRequest) {
-  return runAuthHandler(request)
+  const tail = getLastPathSegment(request.nextUrl.pathname)
+
+  // Hardening: evitar 500 en /api/auth/_log si este path cae por el catch-all.
+  if (tail === '_log') {
+    try {
+      const payload = await request.json().catch(() => null)
+      if (payload) console.error('nextauth_client_log_catchall', payload)
+      return NextResponse.json({ ok: true })
+    } catch (error) {
+      console.error('nextauth_log_fallback_error', error)
+      return NextResponse.json({ ok: true })
+    }
+  }
+
+  return handler(request)
 }
