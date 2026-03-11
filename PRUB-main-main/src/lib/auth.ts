@@ -1,7 +1,7 @@
 // ATLAS GSE - Configuración de NextAuth.js v4
 // Google OAuth + Credentials Provider con demo UNIFICADO
 
-import { NextAuthOptions } from 'next-auth'
+import { NextAuthOptions, type Session } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
@@ -362,7 +362,13 @@ export const authOptions: NextAuthOptions = {
         session.user.permissions = token.permissions as string[]
 
         if (session.user.rol !== 'ADMIN' && !session.user.empresaId) {
-          throw new Error('Usuario sin tenant asignado')
+          console.error('Auth session warning: usuario sin tenant asignado', {
+            userId: session.user.id,
+            email: session.user.email,
+            rol: session.user.rol,
+          })
+          session.user.permissions = []
+          ;(session as Session & { authWarning?: string }).authWarning = 'TENANT_NOT_ASSIGNED'
         }
       }
 

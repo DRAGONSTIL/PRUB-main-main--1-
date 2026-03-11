@@ -1,18 +1,14 @@
-// ATLAS GSE - API de Metas
-
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { MetaCreateSchema, MetaFilterSchema, MetaUpdateSchema } from '@/lib/validations'
+import { MetaCreateSchema, MetaFilterSchema } from '@/lib/validations'
+import { deriveMetaStatus } from '@/lib/workflow'
 
-// GET - Listar metas
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
+    if (!session?.user?.id) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
     const filters = MetaFilterSchema.parse({
@@ -25,38 +21,40 @@ export async function GET(request: NextRequest) {
     })
 
     const skip = (filters.page - 1) * filters.limit
-
-    // Construir filtros
     const where: any = {}
 
     if (session.user.rol === 'RECLUTADOR') {
       where.reclutadorId = session.user.id
     } else if (session.user.rol === 'GERENTE') {
-      // Ver reclutadores de su empresa
       const reclutadores = await db.user.findMany({
-        where: { empresaId: session.user.empresaId, rol: 'RECLUTADOR' },
+        where: { empresaId: session.user.empresaId, rol: { in: ['RECLUTADOR', 'GERENTE'] } },
         select: { id: true },
       })
-      where.reclutadorId = { in: [...reclutadores.map(r => r.id), session.user.id] }
+      const allowedIds = reclutadores.map((r) => r.id)
+      where.reclutadorId = filters.reclutadorId
+        ? { in: allowedIds.filter((id) => id === filters.reclutadorId) }
+        : { in: allowedIds }
+    } else if (filters.reclutadorId) {
+      where.reclutadorId = filters.reclutadorId
     }
 
-    if (filters.reclutadorId) where.reclutadorId = filters.reclutadorId
     if (filters.tipo) where.tipo = filters.tipo
     if (filters.periodo) where.periodo = filters.periodo
-    if (filters.estatus) where.estatus = filters.estatus
 
-    const [metas, total] = await Promise.all([
+    const [metasRaw, total] = await Promise.all([
       db.meta.findMany({
         where,
-        include: {
-          reclutador: { select: { id: true, name: true, email: true } },
-        },
+        include: { reclutador: { select: { id: true, name: true, email: true } } },
         orderBy: { fechaFin: 'asc' },
         skip,
         take: filters.limit,
       }),
       db.meta.count({ where }),
     ])
+
+    const metas = metasRaw
+      .map((meta) => ({ ...meta, estatus: deriveMetaStatus(meta) }))
+      .filter((meta) => (filters.estatus ? meta.estatus === filters.estatus : true))
 
     return NextResponse.json({
       metas,
@@ -68,56 +66,41 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Error obteniendo metas:', error)
-    return NextResponse.json(
-      { error: 'Error al obtener metas', details: String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error al obtener metas', details: String(error) }, { status: 500 })
   }
 }
 
-// POST - Crear meta
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
-    // Solo GERENTE y ADMIN pueden crear metas
+    if (!session?.user?.id) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     if (session.user.rol === 'RECLUTADOR') {
       return NextResponse.json({ error: 'No tienes permiso para crear metas' }, { status: 403 })
     }
 
-    const body = await request.json()
-    const data = MetaCreateSchema.parse(body)
+    const data = MetaCreateSchema.parse(await request.json())
 
-    // Verificar que el reclutador existe y pertenece a la misma empresa
-    const reclutador = await db.user.findUnique({
-      where: { id: data.reclutadorId },
-    })
+    const reclutador = await db.user.findUnique({ where: { id: data.reclutadorId } })
+    if (!reclutador) return NextResponse.json({ error: 'Reclutador no encontrado' }, { status: 404 })
 
-    if (!reclutador) {
-      return NextResponse.json({ error: 'Reclutador no encontrado' }, { status: 404 })
-    }
-
-    if (session.user.rol === 'GERENTE' && reclutador.empresaId !== session.user.empresaId) {
+    if (session.user.rol !== 'ADMIN' && reclutador.empresaId !== session.user.empresaId) {
       return NextResponse.json({ error: 'No puedes asignar metas a este reclutador' }, { status: 403 })
     }
 
+    const estatus = deriveMetaStatus({
+      valor: data.valor,
+      valorActual: 0,
+      fechaInicio: data.fechaInicio,
+      fechaFin: data.fechaFin,
+    })
+
     const meta = await db.meta.create({
-      data,
-      include: {
-        reclutador: { select: { id: true, name: true, email: true } },
-      },
+      data: { ...data, estatus },
+      include: { reclutador: { select: { id: true, name: true, email: true } } },
     })
 
     return NextResponse.json(meta, { status: 201 })
   } catch (error) {
-    console.error('Error creando meta:', error)
-    return NextResponse.json(
-      { error: 'Error al crear meta', details: String(error) },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Error al crear meta', details: String(error) }, { status: 500 })
   }
 }

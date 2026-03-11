@@ -330,11 +330,11 @@ export function MetasManager({ empresaId, userRole, userId, addNotification }: M
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Metas y Métricas</h2>
-          <p className="text-muted-foreground">Asigna y da seguimiento a las metas de tus reclutadores</p>
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-amber-200 via-yellow-100 to-amber-400 bg-clip-text text-transparent">Metas y Métricas</h2>
+          <p className="text-muted-foreground">Control estratégico de alto nivel con experiencia visual ultra-luxury.</p>
         </div>
         {userRole !== 'RECLUTADOR' && (
-          <Button onClick={openNewDialog}>
+          <Button onClick={openNewDialog} className="bg-gradient-to-r from-amber-400 to-yellow-500 text-zinc-950 hover:from-amber-300 hover:to-yellow-400">
             <Plus className="h-4 w-4 mr-2" />
             Nueva Meta
           </Button>
@@ -354,7 +354,7 @@ export function MetasManager({ empresaId, userRole, userId, addNotification }: M
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border-amber-300/20 bg-gradient-to-br from-zinc-950 to-zinc-900 shadow-[0_0_30px_rgba(251,191,36,0.12)]">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
@@ -397,7 +397,7 @@ export function MetasManager({ empresaId, userRole, userId, addNotification }: M
 
       {/* Metas por reclutador */}
       {Object.entries(metasPorReclutador).map(([key, group]) => (
-        <Card key={key}>
+        <Card key={key} className="border-amber-300/20 bg-gradient-to-br from-zinc-950 via-zinc-900 to-amber-950/20">
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
               <Avatar>
